@@ -53,8 +53,8 @@ interface ManusResponse {
   id?: string
   task_id?: string
   status?: string
-  result?: string
-  output?: string
+  result?: string | object | Array<{ id?: string; status?: string; role?: string; type?: string; content?: string }>
+  output?: string | object | Array<{ id?: string; status?: string; role?: string; type?: string; content?: string }>
   message?: string
   error?: string
   steps?: Array<{
@@ -64,7 +64,7 @@ interface ManusResponse {
   artifacts?: Array<{
     type: string
     title: string
-    content?: string
+    content?: string | object
     url?: string
   }>
 }
@@ -220,15 +220,54 @@ export default function DashboardPage() {
 
       const resultData = await pollForResult()
 
-      // Process the final result
-      const responseContent = resultData.result || resultData.output || resultData.message || ""
+      // Process the final result - handle various response formats
+      const extractContent = (data: ManusResponse): string => {
+        // Check for result field
+        if (data.result) {
+          if (typeof data.result === 'string') return data.result
+          if (typeof data.result === 'object') {
+            // Handle array of message objects
+            if (Array.isArray(data.result)) {
+              return data.result
+                .filter((item: { role?: string; content?: string }) => item.role === 'assistant' && item.content)
+                .map((item: { content: string }) => item.content)
+                .join('\n\n')
+            }
+            // Handle single message object
+            const resultObj = data.result as { content?: string; text?: string; message?: string }
+            if (resultObj.content) return String(resultObj.content)
+            if (resultObj.text) return String(resultObj.text)
+            if (resultObj.message) return String(resultObj.message)
+          }
+        }
+        // Check for output field
+        if (data.output) {
+          if (typeof data.output === 'string') return data.output
+          if (typeof data.output === 'object') {
+            if (Array.isArray(data.output)) {
+              return data.output
+                .filter((item: { role?: string; content?: string }) => item.role === 'assistant' && item.content)
+                .map((item: { content: string }) => item.content)
+                .join('\n\n')
+            }
+            const outputObj = data.output as { content?: string; text?: string; message?: string }
+            if (outputObj.content) return String(outputObj.content)
+            if (outputObj.text) return String(outputObj.text)
+          }
+        }
+        // Fallback to message
+        if (data.message && typeof data.message === 'string') return data.message
+        return ""
+      }
+
+      const responseContent = extractContent(resultData)
       
       // Parse artifacts if present
       const artifacts: Artifact[] = (resultData.artifacts || []).map((a, i) => ({
         id: crypto.randomUUID(),
         type: a.type as Artifact["type"] || "document",
         title: a.title || `Artifact ${i + 1}`,
-        content: a.content,
+        content: typeof a.content === 'string' ? a.content : JSON.stringify(a.content),
         url: a.url,
       }))
 

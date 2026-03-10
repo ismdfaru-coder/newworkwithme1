@@ -55,8 +55,8 @@ interface ManusResponse {
   task_id?: string
   taskId?: string
   status?: string
-  result?: string
-  output?: string
+  result?: string | object | Array<{ id?: string; status?: string; role?: string; type?: string; content?: string }>
+  output?: string | object | Array<{ id?: string; status?: string; role?: string; type?: string; content?: string }>
   message?: string
   error?: string
   steps?: Array<{
@@ -66,9 +66,49 @@ interface ManusResponse {
   artifacts?: Array<{
     type: string
     title: string
-    content?: string
+    content?: string | object
     url?: string
   }>
+}
+
+// Helper function to extract string content from various response formats
+const extractContent = (data: ManusResponse): string => {
+  // Check for result field
+  if (data.result) {
+    if (typeof data.result === 'string') return data.result
+    if (typeof data.result === 'object') {
+      // Handle array of message objects
+      if (Array.isArray(data.result)) {
+        return data.result
+          .filter((item) => item.role === 'assistant' && item.content)
+          .map((item) => item.content)
+          .join('\n\n')
+      }
+      // Handle single message object
+      const resultObj = data.result as { content?: string; text?: string; message?: string }
+      if (resultObj.content) return String(resultObj.content)
+      if (resultObj.text) return String(resultObj.text)
+      if (resultObj.message) return String(resultObj.message)
+    }
+  }
+  // Check for output field
+  if (data.output) {
+    if (typeof data.output === 'string') return data.output
+    if (typeof data.output === 'object') {
+      if (Array.isArray(data.output)) {
+        return data.output
+          .filter((item) => item.role === 'assistant' && item.content)
+          .map((item) => item.content)
+          .join('\n\n')
+      }
+      const outputObj = data.output as { content?: string; text?: string; message?: string }
+      if (outputObj.content) return String(outputObj.content)
+      if (outputObj.text) return String(outputObj.text)
+    }
+  }
+  // Fallback to message
+  if (data.message && typeof data.message === 'string') return data.message
+  return ""
 }
 
 export default function AgentsPage() {
@@ -118,7 +158,7 @@ export default function AgentsPage() {
       const status = data.status?.toLowerCase()
 
       // Check if task is complete
-      if (status === "completed" || status === "done" || status === "finished" || data.result || data.output) {
+      if (status === "completed" || status === "done" || status === "finished" || status === "success" || data.result || data.output) {
         // Stop polling
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current)
@@ -127,13 +167,13 @@ export default function AgentsPage() {
         setPollingTaskId(null)
         setIsLoading(false)
 
-        const responseContent = data.result || data.output || data.message || JSON.stringify(data, null, 2)
+        const responseContent = extractContent(data)
         
         const artifacts: Artifact[] = (data.artifacts || []).map((a, i) => ({
           id: crypto.randomUUID(),
           type: a.type as Artifact["type"] || "document",
           title: a.title || `Artifact ${i + 1}`,
-          content: a.content,
+          content: typeof a.content === 'string' ? a.content : JSON.stringify(a.content),
           url: a.url,
         }))
 
@@ -291,13 +331,13 @@ export default function AgentsPage() {
         await pollTaskStatus(taskId, assistantMessage.id)
       } else {
         // If no task ID, treat as immediate response
-        const responseContent = data.result || data.output || data.message || JSON.stringify(data, null, 2)
+        const responseContent = extractContent(data)
         
         const artifacts: Artifact[] = (data.artifacts || []).map((a, i) => ({
           id: crypto.randomUUID(),
           type: a.type as Artifact["type"] || "document",
           title: a.title || `Artifact ${i + 1}`,
-          content: a.content,
+          content: typeof a.content === 'string' ? a.content : JSON.stringify(a.content),
           url: a.url,
         }))
 
