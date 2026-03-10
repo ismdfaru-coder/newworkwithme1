@@ -143,6 +143,7 @@ export default function DashboardPage() {
           : m
       ))
 
+      // Step 1: Create task
       const response = await fetch("/api/manus", {
         method: "POST",
         headers: {
@@ -157,14 +158,73 @@ export default function DashboardPage() {
       const data: ManusResponse = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || data.message || "Failed to get response")
+        throw new Error(data.error || data.message || "Failed to create task")
       }
 
-      // Process the response
-      const responseContent = data.result || data.output || data.message || JSON.stringify(data, null, 2)
+      const taskId = data.task_id || data.id
+      if (!taskId) {
+        throw new Error("No task ID received from API")
+      }
+
+      // Update status to show we're waiting for results
+      setMessages(prev => prev.map(m => 
+        m.id === assistantMessage.id 
+          ? { 
+              ...m, 
+              taskId,
+              steps: [
+                ...(m.steps || []),
+                {
+                  id: crypto.randomUUID(),
+                  type: "analyzing",
+                  description: "Processing your request...",
+                  timestamp: new Date(),
+                }
+              ]
+            }
+          : m
+      ))
+
+      // Step 2: Poll for task result using GET endpoint
+      const pollForResult = async (): Promise<ManusResponse> => {
+        const maxAttempts = 60 // 3 minutes max (60 * 3 seconds)
+        let attempts = 0
+
+        while (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 3000)) // Wait 3 seconds
+          
+          const statusResponse = await fetch(`/api/manus?taskId=${taskId}`)
+          const statusData: ManusResponse = await statusResponse.json()
+
+          if (!statusResponse.ok) {
+            throw new Error(statusData.error || "Failed to get task status")
+          }
+
+          const status = statusData.status?.toLowerCase()
+          
+          // Check if task is complete
+          if (status === "completed" || status === "done" || status === "finished" || status === "success") {
+            return statusData
+          }
+          
+          // Check if task failed
+          if (status === "failed" || status === "error") {
+            throw new Error(statusData.error || statusData.message || "Task failed")
+          }
+
+          attempts++
+        }
+
+        throw new Error("Task timed out")
+      }
+
+      const resultData = await pollForResult()
+
+      // Process the final result
+      const responseContent = resultData.result || resultData.output || resultData.message || ""
       
       // Parse artifacts if present
-      const artifacts: Artifact[] = (data.artifacts || []).map((a, i) => ({
+      const artifacts: Artifact[] = (resultData.artifacts || []).map((a, i) => ({
         id: crypto.randomUUID(),
         type: a.type as Artifact["type"] || "document",
         title: a.title || `Artifact ${i + 1}`,
@@ -178,7 +238,7 @@ export default function DashboardPage() {
               ...m, 
               content: responseContent,
               status: "completed",
-              taskId: data.task_id || data.id,
+              taskId,
               steps: [
                 ...(m.steps || []),
                 {
