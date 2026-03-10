@@ -219,48 +219,90 @@ export default function DashboardPage() {
       }
 
       const resultData = await pollForResult()
+      
+      console.log("[v0] Full API Response:", JSON.stringify(resultData, null, 2))
 
       // Process the final result - handle various response formats
       const extractContent = (data: ManusResponse): string => {
+        console.log("[v0] Extracting content from:", Object.keys(data))
+        
         // Check for result field
-        if (data.result) {
+        if (data.result !== undefined && data.result !== null) {
+          console.log("[v0] Found result field, type:", typeof data.result)
           if (typeof data.result === 'string') return data.result
           if (typeof data.result === 'object') {
             // Handle array of message objects
             if (Array.isArray(data.result)) {
-              return data.result
-                .filter((item: { role?: string; content?: string }) => item.role === 'assistant' && item.content)
-                .map((item: { content: string }) => item.content)
+              console.log("[v0] Result is array with", data.result.length, "items")
+              // Try to find assistant messages with content
+              const assistantContent = data.result
+                .filter((item) => item.role === 'assistant' && item.content)
+                .map((item) => item.content)
                 .join('\n\n')
+              if (assistantContent) return assistantContent
+              
+              // If no assistant messages, try all items with content
+              const allContent = data.result
+                .filter((item) => item.content)
+                .map((item) => item.content)
+                .join('\n\n')
+              if (allContent) return allContent
             }
-            // Handle single message object
-            const resultObj = data.result as { content?: string; text?: string; message?: string }
-            if (resultObj.content) return String(resultObj.content)
-            if (resultObj.text) return String(resultObj.text)
-            if (resultObj.message) return String(resultObj.message)
+            // Handle single message object with various content fields
+            const resultObj = data.result as Record<string, unknown>
+            console.log("[v0] Result object keys:", Object.keys(resultObj))
+            if (resultObj.content && typeof resultObj.content === 'string') return resultObj.content
+            if (resultObj.text && typeof resultObj.text === 'string') return resultObj.text
+            if (resultObj.message && typeof resultObj.message === 'string') return resultObj.message
+            if (resultObj.data && typeof resultObj.data === 'string') return resultObj.data
+            // Last resort - stringify the object but exclude metadata
+            const { id, status, role, type, ...contentFields } = resultObj
+            if (Object.keys(contentFields).length > 0) {
+              return JSON.stringify(contentFields, null, 2)
+            }
           }
         }
+        
         // Check for output field
-        if (data.output) {
+        if (data.output !== undefined && data.output !== null) {
+          console.log("[v0] Found output field, type:", typeof data.output)
           if (typeof data.output === 'string') return data.output
           if (typeof data.output === 'object') {
             if (Array.isArray(data.output)) {
-              return data.output
-                .filter((item: { role?: string; content?: string }) => item.role === 'assistant' && item.content)
-                .map((item: { content: string }) => item.content)
+              const assistantContent = data.output
+                .filter((item) => item.role === 'assistant' && item.content)
+                .map((item) => item.content)
                 .join('\n\n')
+              if (assistantContent) return assistantContent
+              
+              const allContent = data.output
+                .filter((item) => item.content)
+                .map((item) => item.content)
+                .join('\n\n')
+              if (allContent) return allContent
             }
-            const outputObj = data.output as { content?: string; text?: string; message?: string }
-            if (outputObj.content) return String(outputObj.content)
-            if (outputObj.text) return String(outputObj.text)
+            const outputObj = data.output as Record<string, unknown>
+            if (outputObj.content && typeof outputObj.content === 'string') return outputObj.content
+            if (outputObj.text && typeof outputObj.text === 'string') return outputObj.text
+            if (outputObj.data && typeof outputObj.data === 'string') return outputObj.data
           }
         }
+        
         // Fallback to message
         if (data.message && typeof data.message === 'string') return data.message
-        return ""
+        
+        // Ultimate fallback - return stringified data (excluding known metadata)
+        const { id, task_id, status, steps, artifacts, error, ...remaining } = data
+        if (Object.keys(remaining).length > 0) {
+          console.log("[v0] Using fallback, remaining keys:", Object.keys(remaining))
+          return JSON.stringify(remaining, null, 2)
+        }
+        
+        return "No content received from API"
       }
 
       const responseContent = extractContent(resultData)
+      console.log("[v0] Extracted content:", responseContent.substring(0, 200))
       
       // Parse artifacts if present
       const artifacts: Artifact[] = (resultData.artifacts || []).map((a, i) => ({
