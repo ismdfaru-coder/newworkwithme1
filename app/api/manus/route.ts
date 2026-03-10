@@ -5,7 +5,7 @@ const MANUS_API_URL = "https://api.manus.ai/v1/tasks"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { prompt } = body
+    const { prompt, taskMode = "chat" } = body
 
     if (!prompt) {
       return NextResponse.json(
@@ -25,11 +25,14 @@ export async function POST(request: NextRequest) {
     const response = await fetch(MANUS_API_URL, {
       method: "POST",
       headers: {
-        "accept": "application/json",
-        "content-type": "application/json",
         "API_KEY": apiKey,
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({
+        prompt,
+        agentProfile: "manus-1.6",
+        taskMode,
+      }),
     })
 
     if (!response.ok) {
@@ -51,7 +54,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Get task status
+// Get task status with convert=true for final output
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const taskId = searchParams.get("taskId")
@@ -72,10 +75,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(`https://api.manus.ai/v1/tasks/${taskId}`, {
+    const response = await fetch(`${MANUS_API_URL}/${taskId}?convert=true`, {
       method: "GET",
       headers: {
-        "accept": "application/json",
         "API_KEY": apiKey,
       },
     })

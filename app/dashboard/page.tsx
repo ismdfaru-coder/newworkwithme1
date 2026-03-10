@@ -148,7 +148,10 @@ export default function DashboardPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ prompt: userMessage.content }),
+        body: JSON.stringify({ 
+          prompt: userMessage.content,
+          taskMode: "chat"
+        }),
       })
 
       const data: ManusResponse = await response.json()
