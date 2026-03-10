@@ -156,12 +156,15 @@ export default function DashboardPage() {
       })
 
       const data: ManusResponse = await response.json()
+      console.log("[v0] POST Response:", JSON.stringify(data, null, 2))
 
       if (!response.ok) {
         throw new Error(data.error || data.message || "Failed to create task")
       }
 
       const taskId = data.task_id || data.id
+      console.log("[v0] Extracted taskId:", taskId)
+      
       if (!taskId) {
         throw new Error("No task ID received from API")
       }
@@ -193,8 +196,11 @@ export default function DashboardPage() {
         while (attempts < maxAttempts) {
           await new Promise(resolve => setTimeout(resolve, 3000)) // Wait 3 seconds
           
+          console.log("[v0] Polling GET /api/manus?taskId=" + taskId)
           const statusResponse = await fetch(`/api/manus?taskId=${taskId}`)
           const statusData: ManusResponse = await statusResponse.json()
+          console.log("[v0] GET Response status:", statusData.status)
+          console.log("[v0] GET Response keys:", Object.keys(statusData))
 
           if (!statusResponse.ok) {
             throw new Error(statusData.error || "Failed to get task status")
@@ -204,6 +210,7 @@ export default function DashboardPage() {
           
           // Check if task is complete
           if (status === "completed" || status === "done" || status === "finished" || status === "success") {
+            console.log("[v0] Task completed! Full response:", JSON.stringify(statusData, null, 2))
             return statusData
           }
           

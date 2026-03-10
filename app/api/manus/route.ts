@@ -22,6 +22,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    console.log("[v0] POST to Manus API:", { prompt: prompt.substring(0, 50), taskMode })
+    
     const response = await fetch(MANUS_API_URL, {
       method: "POST",
       headers: {
@@ -37,6 +39,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text()
+      console.log("[v0] POST Error:", response.status, errorText)
       return NextResponse.json(
         { error: `Manus API error: ${response.status} - ${errorText}` },
         { status: response.status }
@@ -44,6 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json()
+    console.log("[v0] POST Response from Manus:", JSON.stringify(data, null, 2))
     return NextResponse.json(data)
   } catch (error) {
     console.error("Error calling Manus API:", error)
@@ -75,7 +79,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(`${MANUS_API_URL}/${taskId}?convert=true`, {
+    const url = `${MANUS_API_URL}/${taskId}?convert=true`
+    console.log("[v0] GET from Manus API:", url)
+    
+    const response = await fetch(url, {
       method: "GET",
       headers: {
         "API_KEY": apiKey,
@@ -84,6 +91,7 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text()
+      console.log("[v0] GET Error:", response.status, errorText)
       return NextResponse.json(
         { error: `Manus API error: ${response.status} - ${errorText}` },
         { status: response.status }
@@ -91,6 +99,7 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json()
+    console.log("[v0] GET Response from Manus:", JSON.stringify(data, null, 2))
     return NextResponse.json(data)
   } catch (error) {
     console.error("Error fetching task status:", error)
